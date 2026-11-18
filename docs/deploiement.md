@@ -1,0 +1,137 @@
+# Déploiement
+
+> **Aucun déploiement n'a été réalisé à ce jour.** Ce document décrit une procédure reproductible ;
+> ne déclarez « en production » qu'après avoir exécuté la liste de vérification finale.
+
+## Netlify
+
+Étapes détaillées dans [`docs/netlify.md`](netlify.md) : `netlify.toml` est déjà présent, la base et
+les fichiers doivent être sur Supabase (serverless : ni PGlite, ni stockage local).
+
+## cPanel LWS (sous-domaine)
+
+Étapes détaillées dans [`docs/lws.md`](lws.md). Ce n'est **pas** un serveur dédié : Node.js tourne
+sous **Phusion Passenger**, sans root, sans PM2 et sans reverse proxy. Le fichier de démarrage est
+`passenger.cjs` (à indiquer dans *cPanel → Setup Node.js App*), le DocumentRoot ne contient que le
+`.htaccess` de `deploy/cpanel/`, et le code vit hors de ce dossier. Le build reste nécessaire avant
+chaque redémarrage : `deploy/cpanel/deploy.sh` enchaîne code, dépendances, `env:check`, build,
+relance et contrôle de santé.
+
+## Option A — Hébergeur Node (Vercel, Render, Railway, VPS)
+
+**Contraintes du code actuel** :
+
+- Le serveur doit être **Node.js** (runtime Node, pas Edge) : `pg`, `node:crypto` (scrypt) et le
+  stockage local sur disque sont utilisés.
+- Si `DATABASE_MODE=postgres` → aucun état local ; l'application est sans état et peut être
+  déployée sur plusieurs instances.
+- Si `STORAGE_DRIVER=local` → **un seul disque persistant** partagé : incompatible avec un
+  déploiement multi-instances ou un système de fichiers éphémère (Vercel). Dans ce cas, montez un
+  volume persistant (Render Disks, VPS) ou attendez l'implémentation du stockage objet.
+- PGlite (`DATABASE_MODE=pglite`) est réservé au développement / démonstration mono-processus.
+
+### Étapes (exemple : VPS Linux + PostgreSQL managé)
+
+```bash
+# 1. Base : créer la base PostgreSQL et récupérer la chaîne de connexion
+# 2. Sur le serveur
+npm ci
+npm run build
+cp .env.example .env.production   # renseigner les variables (voir docs/configuration.md)
+npm run db:migrate
+NODE_ENV=production npm start     # écoute sur 0.0.0.0:3000
+```
+
+Placez un reverse proxy (Nginx / Caddy) devant l'application pour :
+
+- terminer le TLS (HTTPS obligatoire : cookies `Secure` en production) ;
+- transmettre `Host` et `X-Forwarded-*` ;
+- imposer `client_max_body_size 12m` (limite de téléversement 10 Mio) ;
+- éventuellement servir les fichiers statiques.
+
+Exemple Nginx minimal :
+
+```nginx
+server {
+  listen 443 ssl http2;
+  server_name excellence360.example.com;
+  client_max_body_size 12m;
+  location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $remote_addr;
+  }
+}
+```
+
+Gestion du processus : `systemd` ou `pm2` avec redémarrage automatique. Gardez `NODE_ENV=production`.
+
+## Option B — Vercel + Supabase
+
+Guide complet : [`docs/vercel.md`](vercel.md) (import, variables, `MAX_UPLOAD_BYTES=4194304`,
+URI de redirection Google, cron de maintenance via GitHub Actions).
+
+La base fonctionne (Supabase PostgreSQL). Le système de fichiers Vercel étant éphémère, configurez
+`STORAGE_DRIVER=supabase` (implémenté via l'API REST, bucket **privé**) :
+
+1. créer un bucket privé `documents` dans Supabase Storage ;
+2. renseigner `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET` ;
+3. vérifier un dépôt + téléchargement de document après déploiement.
+
+⚠️ Ce pilote n'a pas pu être validé contre un projet Supabase réel dans l'environnement de
+développement ; faites ce test avant d'ouvrir l'accès utilisateurs. À défaut, déployez sur un
+hébergeur à disque persistant (option A) avec `STORAGE_DRIVER=local`.
+
+## Variables à renseigner en production
+
+```
+DATABASE_MODE=postgres
+DATABASE_URL=postgresql://...           # pooler Supabase recommandé
+DATABASE_SSL=true
+AUTO_MIGRATE=false                      # lancer db:migrate dans le pipeline de déploiement
+APP_URL=https://excellence360.example.com
+AUTH_ALLOW_REGISTRATION=false           # invitation uniquement (recommandé)
+AUTH_REQUIRE_EMAIL_VERIFICATION=false   # true seulement si un transport d'e-mail est opérationnel
+AUTH_LOGIN_OTP=true                     # code à 6 chiffres par e-mail à chaque connexion par mot de passe (défaut ; exige MAIL_TRANSPORT=resend)
+AUTH_LOGIN_OTP_GOOGLE=false               # false (défaut) = connexion Google en un clic ; true = code e-mail exigé après Google aussi
+MFA_ENCRYPTION_KEY=                      # openssl rand -base64 32 (recommandé)
+GOOGLE_CLIENT_ID=                        # optionnel : OAuth Google, à définir avec le secret
+GOOGLE_CLIENT_SECRET=                    # redirection : <APP_URL>/api/auth/google/callback
+MAIL_TRANSPORT=resend                    # EXIGÉ avec AUTH_LOGIN_OTP=true ; console afficherait le code à l'écran et env:check refuserait le déploiement
+STORAGE_DRIVER=local                     # ou `supabase` (bucket privé)
+ORGANIX_STORAGE_DIR=/var/lib/excellence360/storage
+```
+
+## Liste de vérification avant d'annoncer « en production »
+
+- [ ] PostgreSQL managé, sauvegardes automatiques activées et **restauration testée**
+- [ ] `npm run db:migrate` exécuté, `npm run db:status` → `26/26` migrations
+- [ ] Workflow CI vert sur la version déployée (`.github/workflows/ci.yml`)
+- [ ] `select relrowsecurity, relforcerowsecurity from pg_class where relname in ('customers','invoices','employees');` → `true` partout
+- [ ] `npm run build`, `npm run lint`, `npm run typecheck`, `npm test` verts sur la version déployée
+- [ ] HTTPS actif, `APP_URL` cohérent, cookies `Secure`
+- [ ] Si Google est activé : `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` définis ensemble et
+  `<APP_URL>/api/auth/google/callback` déclaré dans Google Cloud ; connexion réelle testée
+- [ ] Compte « Administrateur principal » nominatif créé, mot de passe fort, 2FA côté hébergeur si possible
+- [ ] Aucune donnée de démonstration en base (`select count(*) from organizations where is_demo;` → 0)
+- [ ] Répertoire de stockage persistant, sauvegardé, droits restreints
+- [ ] Transport d'e-mail arbitré (sinon les invitations/réinitialisations restent manuelles)
+- [ ] Supervision : `GET /api/health` (200 = base et migrations OK, 503 sinon), erreurs serveur, espace disque base + fichiers
+- [ ] `npm run smoke -- --url https://votre-domaine` → 20/20 contrôles, ou `--token` si la base n'est pas joignable depuis la machine de test
+- [ ] `npm run db:maintenance` planifié (cron quotidien : purge sessions/jetons expirés)
+- [ ] `npm run db:backup` planifié (quotidien) + copie hors serveur chiffrée
+- [ ] Procédure de sauvegarde/restauration relue (voir `docs/sauvegarde-restauration.md`)
+
+## Coûts (ordres de grandeur, à confirmer)
+
+| Poste | Option gratuite | Première option payante |
+| --- | --- | --- |
+| Base | Supabase Free (500 Mo, pause après inactivité) | Supabase Pro ≈ 25 $/mois |
+| Hébergement | Vercel Hobby / Render free (veille) | 5–20 $/mois (VPS) |
+| Domaine | — | 10–20 $/an |
+| E-mails | Console (aucun envoi réel) | Resend free (3 000/mois) puis ~20 $/mois |
+| Stockage objet | Supabase Storage 1 Go | ~0,02 $/Go/mois |
+| IA | Désactivée | selon fournisseur (hors périmètre) |
+
+Aucun abonnement n'a été souscrit. Toute dépense doit être validée explicitement.
