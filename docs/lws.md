@@ -60,11 +60,11 @@ Internet ──HTTPS──▶ Apache (cPanel, AutoSSL)
 
 ## 3. Préparer Supabase (une fois)
 
-Le schéma est **déjà appliqué en production** (`26/26` migrations). Si vous partez d'un projet neuf :
+Le schéma est **déjà appliqué en production** (`27/27` migrations, dont `contact_requests`). Si vous partez d'un projet neuf :
 
 ```bash
 DATABASE_MODE=postgres DATABASE_URL='postgresql://…pooler…:6543/postgres' npm run db:migrate
-npm run db:status   # 26/26
+npm run db:status   # 27/27
 ```
 
 Récupérez, depuis la console Supabase :

@@ -48,14 +48,18 @@ ENV_FILE="$APP_DIR/.env.production"
 [[ -f "$ENV_FILE" ]] || { echo "✗ .env.production absent — copiez deploy/cpanel/env.production.example." >&2; exit 1; }
 chmod 600 "$ENV_FILE"
 
-# 4. Dépendances exactes du verrou.
-npm ci --no-audit --no-fund
+# 4. Dépendances exactes du verrou (`--include=dev` requis pour tsx/TypeScript/Tailwind au build).
+npm ci --include=dev --no-audit --no-fund
 
 # 5. Configuration : refuse un déploiement qui ne pourrait pas fonctionner.
-node --env-file="$ENV_FILE" --import tsx scripts/env-check.ts
+NODE_ENV=production node --env-file="$ENV_FILE" --import tsx scripts/env-check.ts
 
 # 6. Build. Passenger ne construit rien : le build doit exister AVANT le redémarrage.
-NEXT_TELEMETRY_DISABLED=1 npm run build
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
+NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 npm run build
 
 # 7. Relance Passenger (surveille tmp/restart.txt).
 mkdir -p tmp

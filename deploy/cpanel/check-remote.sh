@@ -55,6 +55,14 @@ if grep -qi '<meta[^>]+name="robots"[^>]+content="[^"]*noindex' "$TMP/home.html"
 fi
 ok "/ → 200, canonique et Open Graph présents, indexable"
 
+# 2 bis. Page Contact publique et coordonnées officielles.
+CODE="$(get /contact contact.html)"
+[[ "$CODE" == "200" ]] || fail "/contact → $CODE"
+grep -q 'admin@excellence-services-sarl.com' "$TMP/contact.html" || fail "e-mail officiel absent de /contact"
+grep -q '+22778798900' "$TMP/contact.html" || fail "numéro +22778798900 absent de /contact"
+grep -q '+22792800257' "$TMP/contact.html" || fail "numéro +22792800257 absent de /contact"
+ok "/contact → 200, coordonnées officielles présentes"
+
 # 3. Référencement : robots.txt et sitemap.xml générés par Next.js.
 CODE="$(get /robots.txt robots.txt)"
 [[ "$CODE" == "200" ]] || fail "/robots.txt → $CODE (proxy/Passenger ne transmet pas ce chemin)"

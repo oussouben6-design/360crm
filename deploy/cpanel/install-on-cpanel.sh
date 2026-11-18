@@ -7,10 +7,13 @@
 # `passenger.cjs` (racine du projet) et lui transmet les requêtes par un
 # socket Unix ; ce fichier relaie tout vers Next.js.
 #
-#   bash ~/excellence360/deploy/cpanel/install-on-cpanel.sh
+#   bash ~/apps/excellence360/deploy/cpanel/install-on-cpanel.sh
+#
+# Fonctionne aussi bien après extraction de `excellence360-lws.zip` dans
+# `~/apps/excellence360` qu'après un `git clone`.
 #
 # Prérequis (une seule fois, dans cPanel) :
-#   · sous-domaine créé        → voir deploy/cpanel/verify-subdomain.sh
+#   · sous-domaine créé        → 360crm.excellence-services-sarl.com (DocumentRoot dédié)
 #   · Setup Node.js App        → Node 22, « Application startup file » = passenger.cjs
 #   · .env.production          → copié depuis deploy/cpanel/env.production.example
 #
@@ -44,7 +47,7 @@ if ! command -v node >/dev/null 2>&1; then
   red "node est introuvable."
   echo "→ cPanel → Setup Node.js App : créez l'application (Node 22, startup file passenger.cjs),"
   echo "  puis relancez ce script depuis le terminal de l'application (ou après avoir copié"
-  echo "  la commande « source …/bin/activate » affichée par cPanel)."
+  echo "  la commande « source ~/nodevenv/…/bin/activate » affichée par cPanel)."
   exit 1
 fi
 NODE_MAJOR="$(node -v | tr -d v | cut -d. -f1)"
@@ -58,16 +61,14 @@ green "node $(node -v) · npm $(npm -v)"
 blue "2/9 Code source"
 if [[ -d "$APP_DIR/.git" ]]; then
   git fetch --depth 1 origin "$BRANCH"
-  # -B (et non un simple checkout) : fonctionne aussi quand la branche n'existe pas encore
-  # localement, ce qui est le cas d'un clone fraîchement créé sur le serveur.
   git checkout -f -B "$BRANCH" "origin/$BRANCH"
   git reset --hard "origin/$BRANCH"
   green "Code à jour : $(git log -1 --format='%h %s')"
-elif [[ -f "$APP_DIR/package.json" ]]; then
-  echo "Pas de dépôt Git ici (code déjà copié) : rien à récupérer."
+elif [[ -f "$APP_DIR/package.json" && -f "$APP_DIR/passenger.cjs" ]]; then
+  green "Archive applicative détectée (sans Git) : utilisation du code présent."
 else
-  red "Aucun code dans $APP_DIR."
-  echo "→ clonez d'abord le dépôt :"
+  red "Aucun code complet dans $APP_DIR."
+  echo "→ extrayez excellence360-lws.zip dans $APP_DIR ou clonez le dépôt :"
   echo "  git clone $REPO_URL $APP_DIR"
   exit 1
 fi
@@ -77,23 +78,34 @@ ENV_FILE="$APP_DIR/.env.production"
 if [[ ! -f "$ENV_FILE" ]]; then
   red "Fichier .env.production absent."
   echo "→ cp deploy/cpanel/env.production.example .env.production"
-  echo "  puis renseignez-la (base Supabase, Storage, Resend) : sans elle, le build s'arrête"
-  echo "  sur env:check et le site ne peut pas démarrer."
+  echo "  puis renseignez les secrets (mot de passe DB Supabase, SUPABASE_SERVICE_ROLE_KEY,"
+  echo "  RESEND_API_KEY, MFA_ENCRYPTION_KEY, MAINTENANCE_SECRET)."
   exit 1
 fi
 chmod 600 "$ENV_FILE"
-# Un fichier vide n'est pas un fichier renseigné : on refuse un démarrage muet.
 if ! grep -Eq '^[[:space:]]*(DATABASE_URL|APP_URL)=[^[:space:]]+' "$ENV_FILE"; then
   red ".env.production ne contient ni DATABASE_URL ni APP_URL renseignées."
-  echo "→ ouvrez-le (nano .env.production) et remplissez au minimum DATABASE_URL, SUPABASE_URL,"
-  echo "  SUPABASE_SERVICE_ROLE_KEY et APP_URL : voir deploy/cpanel/env.production.example."
+  echo "→ ouvrez-le (nano .env.production) et complétez les variables obligatoires."
+  exit 1
+fi
+if grep -q 'MOT_DE_PASSE_DB' "$ENV_FILE"; then
+  red "DATABASE_URL contient encore la valeur d'exemple MOT_DE_PASSE_DB."
+  echo "→ remplacez MOT_DE_PASSE_DB par le vrai mot de passe PostgreSQL Supabase dans .env.production."
   exit 1
 fi
 green ".env.production présent (droits 600)"
 
-# Les scripts exécutés ci-dessous (env:check, build) doivent voir les mêmes valeurs que
-# l'application : on les exporte depuis .env.production. Le fichier de démarrage
-# (passenger.cjs) les recharge lui-même au démarrage du serveur.
+blue "4/9 Dépendances (y compris outils de build TypeScript / Tailwind / tsx)"
+# cPanel positionne souvent NODE_ENV=production dans le shell : `--include=dev` garantit
+# la présence de `tsx`, `typescript` et `@tailwindcss/postcss` nécessaires au build.
+if [[ -f package-lock.json ]]; then
+  npm ci --include=dev --no-audit --no-fund
+else
+  npm install --include=dev --no-audit --no-fund
+fi
+green "Dépendances installées"
+
+# Exporter les variables de .env.production pour le préflight et le build Next.js.
 set -a
 # shellcheck disable=SC1090
 . "$ENV_FILE"
@@ -101,49 +113,35 @@ set +a
 export NODE_ENV=production
 export NEXT_TELEMETRY_DISABLED=1
 
-blue "4/9 Contrôle de configuration (env:check)"
+blue "5/9 Contrôle de configuration (env:check)"
 node --env-file="$ENV_FILE" --import tsx scripts/env-check.ts
 green "Configuration valide"
 
-blue "5/9 Dépendances (package-lock exact)"
-if [[ -f package-lock.json ]]; then
-  npm ci --no-audit --no-fund
-else
-  npm install --no-audit --no-fund
-fi
-
 blue "6/9 Build de production"
-# Passenger n'exécute pas de commande de build : il faut le build AVANT le démarrage.
-# Le build est déterministe ; le cache incrémental (.next/cache) reste entre deux déploiements.
 NEXT_TELEMETRY_DISABLED=1 npm run build
 green "Build terminé"
 
 blue "7/9 Redémarrage de l'application Passenger"
-touch "$APP_DIR/tmp/restart.txt" 2>/dev/null || {
-  mkdir -p "$APP_DIR/tmp"
-  touch "$APP_DIR/tmp/restart.txt"
-}
+mkdir -p "$APP_DIR/tmp"
+touch "$APP_DIR/tmp/restart.txt"
 green "Redémarrage demandé (tmp/restart.txt) : Passenger relance passenger.cjs à la requête suivante"
 
 blue "8/9 Contrôles locaux"
-# On démarre passenger.cjs sur la boucle locale (127.0.0.1), sans passer par Apache : cela
-# distingue « code cassé » de « Passenger/Apache mal réglé », sans dépendre du DNS.
 if node --env-file="$ENV_FILE" deploy/cpanel/healthcheck.cjs; then
-  green "passenger.cjs démarre et /api/health est sain"
+  green "passenger.cjs démarre et /api/health est sain (27/27 migrations)"
 else
   red "Le serveur Next.js ne répond pas correctement."
-  echo "→ journaux : tail -n 100 ~/logs/*.log (ou cPanel → Mesures → Erreurs)"
+  echo "→ journaux : tail -n 100 ~/logs/excellence360-passenger.log (ou cPanel → Mesures → Erreurs)"
   echo "→ causes usuelles : DATABASE_URL en IPv6 directe (utilisez le pooler, port 6543),"
-  echo "  variable manquante, ou build absent."
+  echo "  variable manquante, ou mot de passe base incorrect."
   exit 1
 fi
 
 blue "9/9 Récapitulatif"
 if [[ -n "${APP_URL:-}" ]]; then
   echo "Adresse publique : $APP_URL"
-  echo "Contrôle HTTPS : curl -I $APP_URL   → doit répondre 200"
+  echo "Page Contact     : $APP_URL/contact"
+  echo "Vérification     : bash deploy/cpanel/check-remote.sh $APP_URL"
 fi
-echo "URL du sous-domaine côté cPanel : vérifiez Domaines → $APP_DIR est bien HORS du DocumentRoot."
-green "Déploiement terminé."
-echo "Prochaine étape recommandée (depuis un poste de développement) :"
-echo "  npm run smoke -- --url https://<votre-sous-domaine> --token <jeton>"
+echo "N'oubliez pas le .htaccess dans le DocumentRoot (ex. ~/public_html/360crm/.htaccess)."
+green "Installation LWS terminée avec succès."

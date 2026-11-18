@@ -25,7 +25,8 @@
     "db:maintenance": "tsx --env-file-if-exists=.env.local scripts/maintenance.ts",
     "smoke": "tsx --env-file-if-exists=.env.local scripts/smoke.ts",
     "admin:create": "tsx --env-file-if-exists=.env.local scripts/create-admin.ts",
-    "env:check": "tsx --env-file-if-exists=.env.local scripts/env-check.ts"
+    "env:check": "tsx --env-file-if-exists=.env.local scripts/env-check.ts",
+    "pack:lws": "tsx scripts/pack-lws.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.14",
