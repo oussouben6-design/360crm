@@ -1,0 +1,398 @@
+/**
+ * Audit de schéma : dérive entre la base réelle et ce que produit le dépôt.
+ * Usage :
+ *   npm run db:audit              # contrôle, code de sortie 1 si bloquant
+ *   npm run db:audit -- --update  # régénère supabase/schema-lock.json depuis la base courante
+ *
+ * Six contrôles :
+ *  1. Journal des migrations : `app.migrations` doit contenir exactement les fichiers de
+ *     `supabase/migrations/`. Une entrée sans fichier = objet créé hors versionnement (dérive) ;
+ *     un fichier sans entrée = migration non appliquée.
+ *  2. RLS activée **et forcée** sur toutes les tables métier de `public`.
+ *  3. Aucun privilège `anon`/`authenticated` sur les tables de `public` (durcissement 0013) :
+ *     l'API n'est atteignable que par le serveur Next.js via `organix_app`.
+ *  4. Aucune fonction `security definer` de `app`/`public` exécutable par `anon`/`authenticated`.
+ *  5. Modèle RPC réellement exécutable : `authenticated` doit avoir l'USAGE du schéma `app`
+ *     (sinon toute politique RLS échoue en `42501: permission denied for schema app`, même avec
+ *     le contexte JWT de `0022`), `anon` ne doit pas l'avoir, et **aucune** fonction ne doit être
+ *     exécutable par PUBLIC (`proacl` NULL ou entrée `=X/`) — révoquer un rôle nommé ne retire
+ *     pas un droit hérité (défaut mesuré en production le 12 nov. 2026, corrigé par `0026`).
+ *  6. Verrou de schéma (`supabase/schema-lock.json`) : inventaire des tables, colonnes, index,
+ *     contraintes, politiques RLS, déclencheurs et fonctions. Toute divergence base/verrou est
+ *     une erreur, où qu'elle aille — cela protège à la fois « j'ai modé la base sans le Git » et
+ *     « j'ai modifié les migrations sans re-valider la production ».
+ */
+import { readFile, readdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { getDb, closeDb, privileged } from "../src/lib/db";
+import { MIGRATIONS_PATH } from "../src/lib/db/client";
+import type { SqlExecutor } from "../src/lib/db/client";
+
+/**
+ * Privilèges de table tolérés pour les rôles Supabase, et à quelle condition. Le modèle retenu
+ * (`0022`/`0023`) garde l'API générée fermée, à l'exception de la lecture de `notifications`
+ * par un abonné `supabase_realtime` : sans ce SELECT, Realtime (qui évalue la RLS sous le rôle
+ * de l'abonné) ne délivre rien. Tout le reste reste interdit, comme pour `0013`/`0020`.
+ */
+const SUPABASE_ONLY_GRANTS = new Set([
+  "authenticated|SELECT|notifications",
+  "anon|INSERT|contact_requests",
+  "authenticated|INSERT|contact_requests",
+]);
+
+const LOCK_PATH = path.join(process.cwd(), "supabase", "schema-lock.json");
+const update = process.argv.includes("--update");
+
+/**
+ * Objets que seule une base Supabase sait produire (schéma `auth` présent). Ils sont exclus de
+ * la comparaison avec le verrou lorsque l'audit tourne sur PGlite, dont le moteur ne peut pas
+ * les créer — sinon chaque déploiement local crierait à la dérive.
+ */
+const SUPABASE_TRIGGERS_ONLY = new Set([
+  "tasks|tasks_notify_assigned",
+  "leave_requests|leave_requests_notify_decided",
+]);
+
+const SUPABASE_ONLY = new Set([
+  "public.handle_new_user",
+  "public.bootstrap_organization",
+  "public.add_organization_member_by_email",
+  "public.convert_quote_to_invoice",
+  "public.notify_task_assigned",
+  "public.notify_leave_decided",
+  "public.rls_auto_enable", // fourni par la plateforme Supabase, pas par le dépôt
+]);
+
+interface Inventory {
+  migrations: string[];
+  tables: string[];
+  columns: string[];
+  indexes: string[];
+  constraints: string[];
+  policies: string[];
+  triggers: string[];
+  functions: string[];
+}
+
+async function sorted(tx: SqlExecutor, sql: string): Promise<string[]> {
+  const rows = await tx.query<{ v: string }>(sql);
+  return rows.map((row) => row.v).sort();
+}
+
+async function collect(tx: SqlExecutor): Promise<Inventory> {
+  return {
+    migrations: (await readdir(MIGRATIONS_PATH)).filter((f) => f.endsWith(".sql")).sort(),
+    tables: await sorted(
+      tx,
+      `select c.relname as v from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'r'`,
+    ),
+    columns: await sorted(
+      tx,
+      `select table_name || '.' || column_name as v from information_schema.columns
+        where table_schema = 'public'`,
+    ),
+    indexes: await sorted(
+      tx,
+      `select tablename || '|' || indexname as v from pg_indexes where schemaname = 'public'`,
+    ),
+    // Les contraintes NOT NULL ne sont pas toutes dans pg_constraint selon les mineures de
+    // PostgreSQL 17 : on compare le nombre de colonnes NOT NULL via `columns` + ce relevé.
+    constraints: await sorted(
+      tx,
+      `select c.relname || '|' || con.conname || '|' || con.contype::text as v
+        from pg_constraint con join pg_class c on c.oid = con.conrelid
+        join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and con.contype <> 'n'`,
+    ),
+    policies: await sorted(
+      tx,
+      `select tablename || '|' || policyname as v from pg_policies where schemaname = 'public'`,
+    ),
+    triggers: await sorted(
+      tx,
+      `select c.relname || '|' || t.tgname as v from pg_trigger t
+        join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and not t.tgisinternal`,
+    ),
+    functions: await sorted(
+      tx,
+      `select n.nspname || '.' || p.proname as v from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('app', 'public')`,
+    ),
+  };
+}
+
+function diffSets(reference: string[], actual: string[]): { onlyActual: string[]; onlyReference: string[] } {
+  const ref = new Set(reference);
+  const act = new Set(actual);
+  return {
+    onlyActual: actual.filter((v) => !ref.has(v)),
+    onlyReference: reference.filter((v) => !act.has(v)),
+  };
+}
+
+async function main() {
+  const db = await getDb();
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const notes: string[] = [];
+
+  const data = await privileged(async (tx) => {
+    const inventory = await collect(tx);
+    let ledger: string[] = [];
+    try {
+      const rows = await tx.query<{ name: string }>("select name from app.migrations");
+      ledger = rows.map((row) => row.name).sort();
+    } catch {
+      notes.push("journal `app.migrations` absent : migrations non appliquées");
+    }
+    const rls = await tx.query<{ relname: string; rls: boolean; force: boolean }>(
+      `select c.relname, c.relrowsecurity as rls, c.relforcerowsecurity as force
+        from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'r' order by 1`,
+    );
+    const exposedGrants = await tx
+      .query<{ grantee: string; privilege: string; tbl: string }>(
+        `select grantee, privilege_type as privilege, table_name as tbl
+          from information_schema.role_table_grants
+          where table_schema = 'public' and grantee in ('anon', 'authenticated')
+          order by 1, 2, 3`,
+      )
+      .catch(() => [] as { grantee: string; privilege: string; tbl: string }[]);
+    const realtimeTables = await tx
+      .query<{ tbl: string }>(
+        `select tablename as tbl from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public'`,
+      )
+      .catch(() => [] as { tbl: string }[]);
+    const roles = await tx.query<{ rolname: string }>(
+      `select rolname from pg_roles where rolname in ('anon', 'authenticated')`,
+    );
+    // Usage du schéma `app` par les rôles d'API. Les politiques appellent toutes
+    // `app.current_user_id()`, `app.has_permission(...)` : PostgreSQL vérifie l'usage du schéma
+    // AVANT d'exécuter la fonction. Sans lui, chaque lecture PostgREST/Realtime/RPC échoue en
+    // `42501: permission denied for schema app` — c'est arrivé en production le 12 nov. 2026
+    // (`0013`/`0020` révoquent l'usage, rien ne le rétablissait).
+    const schemaUsage = await tx
+      .query<{ role: string; usage: boolean }>(
+        `select r.rolname as role, has_schema_privilege(r.rolname, 'app', 'USAGE') as usage
+           from pg_roles r where r.rolname in ('anon', 'authenticated') order by 1`,
+      )
+      .catch(() => [] as { role: string; usage: boolean }[]);
+    // Privilèges hérités de PUBLIC (`proacl` sans entrée par rôle, ou entrée `=X/`). Révoquer un
+    // rôle nommé ne les retire pas : c'est pourquoi `0020`/`0023` semblaient sans effet sur
+    // `public.rls_auto_enable()`.
+    const publicFunctions = await tx
+      .query<{ name: string }>(
+        `select n.nspname || '.' || p.proname as name from pg_proc p
+           join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname in ('app', 'public') and p.prokind = 'f'
+            and (p.proacl is null
+                 or exists (select 1 from unnest(p.proacl) a where a::text like '=X/%'))
+          order by 1`,
+      )
+      .catch(() => [] as { name: string }[]);
+    let exposedFunctions: { name: string; role: string }[] = [];
+    if (roles.length > 0) {
+      exposedFunctions = await tx.query<{ name: string; role: string }>(
+        `select n.nspname || '.' || p.proname as name, r.rolname as role from pg_proc p
+          join pg_namespace n on n.oid = p.pronamespace
+          cross join lateral unnest(array['anon', 'authenticated']) as r(rolname)
+          where n.nspname in ('app', 'public') and p.prosecdef
+            and has_schema_privilege(r.rolname, n.nspname, 'USAGE')
+            and has_function_privilege(r.rolname, p.oid, 'EXECUTE')
+          order by 1`,
+      ).catch(() => []);
+    }
+    // Politique permissive lisible sans restriction : `FOR ALL` (polcmd '*') ou `FOR SELECT`
+    // ('r') sans clause USING vaut pour SELECT avec USING implicite `true`, est OR-ée aux autres
+    // politiques permissives et annule donc le filtrage par organisation.
+    // Mémo des valeurs de pg_policy.polcmd (source d'une première analyse erronée) :
+    //   'r' SELECT · 'a' INSERT · 'w' UPDATE · 'd' DELETE · '*' ALL.
+    // Une politique `for insert` sans USING est NORMALE (elle n'utilise que WITH CHECK).
+    const leakyPolicies = await tx
+      .query<{ name: string }>(
+        `select c.relname || '|' || pol.polname as name from pg_policy pol
+          join pg_class c on c.oid = pol.polrelid join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'public' and pol.polcmd in ('*', 'r') and pol.polqual is null
+          order by 1`,
+      )
+      .catch(() => [] as { name: string }[]);
+
+    return {
+      inventory,
+      ledger,
+      rls,
+      exposedGrants,
+      realtimeTables,
+      exposedFunctions,
+      schemaUsage,
+      publicFunctions,
+      leakyPolicies,
+      supabaseRoles: roles.length > 0,
+    };
+  });
+
+  if (db.driver === "pglite") {
+    data.inventory.functions = data.inventory.functions.filter((f) => !SUPABASE_ONLY.has(f));
+    data.inventory.triggers = data.inventory.triggers.filter((t) => !SUPABASE_TRIGGERS_ONLY.has(t));
+    notes.push(
+      "PGlite : objets réservés Supabase (déclencheurs de notification, fonctions `auth.*`) exclus de la comparaison",
+    );
+  }
+
+  console.info(`[excellence360:audit] Moteur : ${db.driver}`);
+  console.info(
+    `[excellence360:audit] Inventaire : ${data.inventory.tables.length} tables · ` +
+      `${data.inventory.policies.length} politiques RLS · ${data.inventory.triggers.length} déclencheurs · ` +
+      `${data.inventory.functions.length} fonctions · ${data.inventory.columns.length} colonnes`,
+  );
+
+  // 1. Journal des migrations
+  const unknownInDb = data.ledger.filter((name) => !data.inventory.migrations.includes(name));
+  const notApplied = data.inventory.migrations.filter((name) => !data.ledger.includes(name));
+  if (unknownInDb.length > 0) {
+    errors.push(
+      `journal de migrations contient ${unknownInDb.length} entrée(s) sans fichier dans le dépôt ` +
+        `(objets SQL appliqués hors versionnement) : ${unknownInDb.join(", ")}`,
+    );
+  }
+  if (notApplied.length > 0) {
+    errors.push(`migration(s) du dépôt non appliquée(s) : ${notApplied.join(", ")}`);
+  }
+
+  // 2. RLS
+  const noRls = data.rls.filter((t) => !t.rls || !t.force).map((t) => `${t.relname}${t.rls ? " (non forcée)" : ""}`);
+  if (noRls.length > 0) errors.push(`RLS non activée/forcée sur : ${noRls.join(", ")}`);
+
+  // 3 et 4. Exposition PostgREST
+  const realtime = new Set(data.realtimeTables.map((r) => r.tbl));
+  const tolerated = new Set<string>();
+  for (const entry of SUPABASE_ONLY_GRANTS) {
+    const parts = entry.split("|");
+    const privilege = parts[1];
+    const table = parts[2];
+    if (privilege === "SELECT" && table && realtime.has(table)) tolerated.add(entry);
+    if (privilege === "INSERT" && table === "contact_requests") tolerated.add(entry);
+  }
+  const unexpectedGrants = data.exposedGrants.filter(
+    (g) => !tolerated.has(`${g.grantee}|${g.privilege}|${g.tbl}`),
+  );
+  if (data.supabaseRoles && unexpectedGrants.length > 0) {
+    const detail = unexpectedGrants.map((g) => `${g.grantee}.${g.privilege} sur ${g.tbl}`).join(", ");
+    errors.push(
+      `privilèges révoqués par les migrations 0013/0020 retrouvés sur les tables métier : ${detail}. ` +
+        `Ces tables redeviennent interrogeables via l'API générée (PostgREST) avec un jeton.`,
+    );
+  }
+  if (tolerated.size > 0 && data.supabaseRoles) {
+    notes.push(
+      `privilèges publics contrôlés tolérés (Realtime notifications / dépôt contact_requests) : ${[...tolerated].join(", ")}`,
+    );
+  }
+  // Une politique `FOR ALL` sans USING filtre aussi peu qu'une politique SELECT absente.
+  if (data.leakyPolicies.length > 0) {
+    errors.push(
+      `politique(s) permissive(s) « for all » sans clause USING — donc valables pour SELECT avec ` +
+        `USING implicite vrai, ce qui annule l'isolation par organisation : ` +
+        `${data.leakyPolicies.map((p) => p.name).join(", ")}.`,
+    );
+  }
+
+  // 4 bis. Privilèges hérités de PUBLIC : proacl NULL = exécutable par tout rôle.
+  if (data.supabaseRoles && data.publicFunctions.length > 0) {
+    errors.push(
+      `fonction(s) exécutable(s) par PUBLIC (aucune ACL explicite, ou entrée « =X/ ») : ` +
+        `${data.publicFunctions.map((f) => f.name).join(", ")}. ` +
+        `Révoquer un rôle nommé ne retire pas un droit hérité de PUBLIC — 0026 rend les ACL explicites.`,
+    );
+  }
+
+  // 4 ter. Usage du schéma `app` : condition d'exécution des politiques RLS.
+  const missingUsage = data.schemaUsage.filter((row) => row.role === "authenticated" && !row.usage);
+  if (missingUsage.length > 0) {
+    errors.push(
+      `« authenticated » n'a pas l'USAGE du schéma app : toute politique RLS échoue en ` +
+        `« 42501: permission denied for schema app » sur les voies PostgREST/Realtime/RPC ` +
+        `(0022 lit le jeton, mais la fonction reste inatteignable). 0026 doit être appliquée.`,
+    );
+  }
+  const anonUsage = data.schemaUsage.filter((row) => row.role === "anon" && row.usage);
+  if (anonUsage.length > 0) {
+    errors.push(
+      `« anon » a l'USAGE du schéma app : aucun jeton, donc aucun besoin, et la surface d'API ` +
+        `générée s'ouvre inutilement sur les prédicats d'autorisation.`,
+    );
+  }
+
+  const anonExposed = data.exposedFunctions.filter((f) => f.role === "anon").map((f) => f.name);
+  const authExposed = data.exposedFunctions.filter((f) => f.role === "authenticated").map((f) => f.name);
+  if (anonExposed.length > 0) {
+    errors.push(
+      `fonction(s) security definer exécutable(s) par le rôle ANONYNE : ${anonExposed.join(", ")}. ` +
+        `Une fonction de déclencheur ou de service n'a rien à exposer sans jeton.`,
+    );
+  }
+  if (authExposed.length > 0) {
+    warnings.push(
+      `fonction(s) security definer exécutable(s) par « authenticated » (modèle RPC PostgREST, à ` +
+        `valider) : ${authExposed.join(", ")}`,
+    );
+  }
+
+  // 5. Verrou de schéma
+  let lock: Inventory | null = null;
+  try {
+    lock = JSON.parse(await readFile(LOCK_PATH, "utf8")) as Inventory & { generatedAt?: string; driver?: string };
+  } catch {
+    if (!update) {
+      notes.push("verrou de schéma absent (supabase/schema-lock.json) : `npm run db:audit -- --update` pour le créer");
+    }
+  }
+  if (lock) {
+    for (const key of Object.keys(data.inventory) as (keyof Inventory)[]) {
+      const { onlyActual, onlyReference } = diffSets(lock[key], data.inventory[key]);
+      if (onlyActual.length > 0) {
+        errors.push(
+          `${key} : ${onlyActual.length} objet(s) présent(s) en base mais pas dans le verrou — ` +
+            `${onlyActual.slice(0, 12).join(", ")}${onlyActual.length > 12 ? ", …" : ""}`,
+        );
+      }
+      if (onlyReference.length > 0) {
+        errors.push(
+          `${key} : ${onlyReference.length} objet(s) attendu(s) par le verrou mais absent(s) de la base — ` +
+            `${onlyReference.slice(0, 12).join(", ")}${onlyReference.length > 12 ? ", …" : ""}`,
+        );
+      }
+    }
+  }
+
+  if (update) {
+    await writeFile(
+      LOCK_PATH,
+      `${JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), driver: db.driver, ...data.inventory }, null, 2)}\n`,
+      "utf8",
+    );
+    console.info(`[excellence360:audit] Verrou écrit : ${path.relative(process.cwd(), LOCK_PATH)}`);
+  }
+
+  for (const note of notes) console.info(`  · ${note}`);
+  if (warnings.length > 0) {
+    console.info("\n[excellence360:audit] Avertissements :");
+    for (const warning of warnings) console.warn(`  ⚠ ${warning}`);
+  }
+  if (errors.length > 0) {
+    console.error(`\n[excellence360:audit] ${errors.length} anomalie(s) :`);
+    for (const error of errors) console.error(`  ✗ ${error}`);
+    process.exitCode = 1;
+  } else if (!update) {
+    console.info("\n[excellence360:audit] Schéma conforme au dépôt : aucune dérive détectée.");
+  }
+
+  await closeDb();
+}
+
+main().catch((error) => {
+  console.error("[excellence360:audit] Échec de l'audit :", error);
+  process.exitCode = 1;
+});
