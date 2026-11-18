@@ -30,9 +30,6 @@ next-env.d.ts
 .deploy-logs/
 tmp/restart.txt
 
-# Archives de déploiement générées localement (`npm run pack:lws`)
-telechargements/
-
 # Sauvegardes locales (ne jamais committer : contiennent des données réelles)
 backups/
 .data.avant-restauration-*
