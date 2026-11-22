@@ -5,10 +5,11 @@ import { expect, test } from "@playwright/test";
  * Aucune donnée de démonstration n'est supposée présente.
  */
 test.describe("espace public", () => {
-  test("la page d'accueil distingue les modules disponibles et en développement", async ({ page }) => {
+  test("la page d'accueil présente les modules disponibles et l'assistant IA connecté", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(page.getByText(/en développement/i).first()).toBeVisible();
+    await expect(page.getByText(/disponible/i).first()).toBeVisible();
+    await expect(page.getByText(/assistant ia/i).first()).toBeVisible();
   });
 
   test("une route protégée redirige vers la connexion", async ({ page }) => {

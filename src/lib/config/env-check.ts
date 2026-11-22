@@ -254,6 +254,18 @@ export function checkEnvironment(
     notes.push("AUTH_ALLOW_REGISTRATION non défini : création libre de compte activée (valeur par défaut).");
   }
 
+  // ---------------------------------------------------------------- intelligence artificielle
+  const aiProvider = env.OPENAI_API_KEY?.trim()
+    ? "OpenAI"
+    : env.GROQ_API_KEY?.trim()
+      ? "Groq"
+      : env.GEMINI_API_KEY?.trim()
+        ? "Google Gemini"
+        : env.ANTHROPIC_API_KEY?.trim()
+          ? "Anthropic Claude"
+          : "Moteur analytique embarqué Excellence 360";
+  notes.push(`Assistant IA : connecté (${aiProvider})`);
+
   return {
     errors,
     warnings,

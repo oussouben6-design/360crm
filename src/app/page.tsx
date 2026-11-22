@@ -155,8 +155,8 @@ export default async function LandingPage() {
               <h2 className="text-2xl font-semibold tracking-tight">Une plateforme modulaire</h2>
               <p className="text-sm text-muted-foreground">
                 Activez uniquement les modules utiles. Chaque module possède ses propres tables,
-                permissions et règles métier. Les modules non disponibles (assistant IA) sont signalés
-                comme tels dans l&apos;application.
+                permissions et règles métier — y compris l&apos;Assistant IA connecté à vos données
+                autorisées.
               </p>
             </div>
             <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -197,10 +197,10 @@ export default async function LandingPage() {
             </div>
             <div className="space-y-2">
               <Bot className="size-5 text-primary" />
-              <h3 className="font-semibold">Évolutif</h3>
+              <h3 className="font-semibold">Assistant IA connecté</h3>
               <p className="text-sm text-muted-foreground">
-                Architecture monolithe modulaire, prête pour un déploiement SaaS ou privé. Les services
-                externes sont remplaçables.
+                Synthèse exécutive, analyse du pipeline commercial, suivi des projets et aide à la
+                rédaction directement connectés aux données autorisées par votre rôle.
               </p>
             </div>
           </div>

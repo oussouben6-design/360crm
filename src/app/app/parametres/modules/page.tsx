@@ -34,10 +34,9 @@ export default async function ModulesPage() {
         description="Activez uniquement les modules utiles à votre organisation. Les modules désactivés restent accessibles aux administrateurs."
       />
 
-      <Alert variant="info" title="Modules en développement">
-        Les modules signalés « En développement » disposent de leur schéma de base de données et de leurs
-        politiques de sécurité, mais leur interface métier n&apos;est pas encore disponible. Ils sont
-        explicitement identifiés pour éviter toute confusion.
+      <Alert variant="info" title="Modules et Assistant IA connectés">
+        Tous les modules — y compris l&apos;Assistant IA — s&apos;appuient sur le schéma PostgreSQL de
+        votre organisation, vos politiques Row Level Security et les permissions de chaque rôle.
       </Alert>
 
       <Card>

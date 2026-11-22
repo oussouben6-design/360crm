@@ -43,6 +43,7 @@ const PRIVATE_PAGES = [
   "/app/communication",
   "/app/rapports",
   "/app/journal",
+  "/app/assistant",
   "/app/recherche?q=de",
   "/app/parametres/organisation",
   "/app/parametres/profil",

@@ -67,7 +67,7 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
     description: "Gestion opérationnelle de son périmètre et validation des demandes de son équipe.",
     rank: 30,
     grants: {
-      ...readAll(["audit", "roles", "finance", "ai"]),
+      ...readAll(["audit", "roles", "finance"]),
       finance: ["read"],
       members: ["read"],
       roles: ["read"],
@@ -101,6 +101,7 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
       partners: ["read", "create", "update", "export"],
       communication: ["read", "create"],
       reports: ["read", "export"],
+      ai: ["read"],
     },
   },
   {
@@ -117,6 +118,7 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
       documents: ["read", "create"],
       communication: ["read"],
       reports: ["read"],
+      ai: ["read"],
     },
   },
   {
@@ -133,6 +135,7 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
       documents: ["read"],
       communication: ["read"],
       reports: ["read"],
+      ai: ["read"],
     },
   },
 ];
