@@ -180,7 +180,7 @@ export function PublicFooter({ authenticated = false }: { authenticated?: boolea
           <p>
             © {new Date().getFullYear()} {APP_COMPANY_LEGAL} — {APP_NAME}. Tous droits réservés.
           </p>
-          <p>Les modules non finalisés sont signalés dans l&apos;interface.</p>
+          <p>Solution intégrée de gestion et de pilotage d&apos;entreprise.</p>
         </div>
       </div>
     </footer>

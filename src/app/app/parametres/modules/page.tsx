@@ -34,9 +34,9 @@ export default async function ModulesPage() {
         description="Activez uniquement les modules utiles à votre organisation. Les modules désactivés restent accessibles aux administrateurs."
       />
 
-      <Alert variant="info" title="Modules et Assistant IA connectés">
-        Tous les modules — y compris l&apos;Assistant IA — s&apos;appuient sur le schéma PostgreSQL de
-        votre organisation, vos politiques Row Level Security et les permissions de chaque rôle.
+      <Alert variant="info" title="Modules de l'organisation">
+        Activez ou désactivez les modules selon les besoins de vos équipes. Chaque module respecte
+        les droits d&apos;accès attribués aux rôles de votre organisation.
       </Alert>
 
       <Card>

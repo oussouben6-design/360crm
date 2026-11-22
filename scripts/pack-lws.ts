@@ -29,15 +29,11 @@ const INCLUDED_PATHS = [
   "tsconfig.json",
   "eslint.config.mjs",
   ".env.example",
-  "README.md",
   "src",
   "public",
   "supabase",
   "scripts",
   "deploy/cpanel",
-  "docs/lws.md",
-  "docs/configuration.md",
-  "docs/supabase.md",
 ] as const;
 
 const FORBIDDEN_PATTERNS = [

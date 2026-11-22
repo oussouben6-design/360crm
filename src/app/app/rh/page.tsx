@@ -9,7 +9,7 @@ import {
   listLeaveRequests,
 } from "@/modules/hr/service";
 import { listDepartments } from "@/modules/organization/service";
-import { PageHeader, EmptyState, StatCard, Alert } from "@/components/ui/misc";
+import { PageHeader, EmptyState, StatCard } from "@/components/ui/misc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -99,11 +99,6 @@ export default async function HrPage({
           ) : null
         }
       />
-
-      <Alert variant="info" title="Périmètre du module">
-        Ce module gère les dossiers administratifs, les contrats et les congés. Il ne calcule aucune
-        paie, ne produit aucun bulletin de salaire et ne réalise aucune déclaration sociale.
-      </Alert>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Effectif" value={summary.headcount} icon={<Users className="size-4" />} />

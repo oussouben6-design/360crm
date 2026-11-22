@@ -34,7 +34,7 @@ import { isPersonalMode } from "@/lib/personal";
 import { getSessionUser } from "@/lib/server/context";
 
 export default async function LandingPage() {
-  if (isPersonalMode()) redirect("/app"); // accès personnel direct
+  if (isPersonalMode()) redirect("/app");
   const user = await getSessionUser();
 
   const modules = NAVIGATION.flatMap((section) => section.items).filter(
@@ -66,9 +66,9 @@ export default async function LandingPage() {
                 dans un seul logiciel.
               </h1>
               <p className="max-w-xl text-base text-muted-foreground">
-                {APP_NAME}, par {APP_COMPANY}, réunit les activités administratives, commerciales,
-                financières, humaines et opérationnelles. Chaque chiffre affiché provient de votre
-                base de données, jamais d&apos;un jeu de démonstration.
+                {APP_NAME}, édité par {APP_COMPANY}, réunit la gestion commerciale, le suivi des
+                projets, la facturation, les ressources humaines et le pilotage de la performance au
+                sein d&apos;un espace unique et intuitif.
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link
@@ -87,13 +87,13 @@ export default async function LandingPage() {
               </div>
               <ul className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
                 <li className="flex items-center gap-1.5">
-                  <CheckCircle2 className="size-4 text-success" /> Permissions vérifiées côté serveur
+                  <CheckCircle2 className="size-4 text-success" /> Gestion des équipes et des rôles
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <CheckCircle2 className="size-4 text-success" /> Isolation des organisations (RLS)
+                  <CheckCircle2 className="size-4 text-success" /> Espaces d&apos;organisation dédiés
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <CheckCircle2 className="size-4 text-success" /> Journal d&apos;audit
+                  <CheckCircle2 className="size-4 text-success" /> Suivi des activités en temps réel
                 </li>
               </ul>
             </div>
@@ -105,15 +105,15 @@ export default async function LandingPage() {
                   <span className="size-2 rounded-full bg-warning/60" />
                   <span className="size-2 rounded-full bg-success/60" />
                   <span className="ml-2 text-xs text-muted-foreground">
-                    excellence360 · tableau de bord
+                    {APP_NAME} · Tableau de bord
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-3 p-4">
                   {[
                     { label: "Projets actifs", icon: FolderKanban },
-                    { label: "Tâches en retard", icon: ShieldCheck },
-                    { label: "Clients", icon: Users },
-                    { label: "Trésorerie", icon: Wallet },
+                    { label: "Suivi des tâches", icon: ShieldCheck },
+                    { label: "Clients & prospects", icon: Users },
+                    { label: "Facturation & trésorerie", icon: Wallet },
                   ].map((item) => (
                     <div key={item.label} className="rounded-lg border border-border p-3">
                       <item.icon className="size-4 text-muted-foreground" />
@@ -135,14 +135,13 @@ export default async function LandingPage() {
                     ))}
                   </div>
                   <p className="mt-2 text-[11px] text-muted-foreground">
-                    Illustration de l&apos;interface — aucune donnée réelle n&apos;est affichée sur cette
-                    page.
+                    Vue synthétique de vos indicateurs commerciaux, opérationnels et financiers.
                   </p>
                 </div>
               </div>
               <div className="absolute -bottom-4 -right-2 hidden rounded-xl border border-border bg-card px-3 py-2 text-xs shadow-lg sm:block">
                 <span className="flex items-center gap-1.5 font-medium">
-                  <Lock className="size-3.5 text-success" /> RLS active sur toutes les tables
+                  <Lock className="size-3.5 text-success" /> Espace professionnel sécurisé
                 </span>
               </div>
             </div>
@@ -154,9 +153,8 @@ export default async function LandingPage() {
             <div className="max-w-2xl space-y-2">
               <h2 className="text-2xl font-semibold tracking-tight">Une plateforme modulaire</h2>
               <p className="text-sm text-muted-foreground">
-                Activez uniquement les modules utiles. Chaque module possède ses propres tables,
-                permissions et règles métier — y compris l&apos;Assistant IA connecté à vos données
-                autorisées.
+                Activez les fonctionnalités adaptées à votre activité : gestion de la relation client,
+                prospection, projets, facturation, ressources humaines et Assistant IA intégré.
               </p>
             </div>
             <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -164,11 +162,7 @@ export default async function LandingPage() {
                 <div key={module.href} className="rounded-xl border border-border bg-card p-4">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold">{module.label}</p>
-                    {module.status === "development" ? (
-                      <Badge variant="warning">Non disponible</Badge>
-                    ) : (
-                      <Badge variant="success">Disponible</Badge>
-                    )}
+                    <Badge variant="success">Disponible</Badge>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">{module.description}</p>
                 </div>
@@ -181,26 +175,26 @@ export default async function LandingPage() {
           <div className="grid gap-6 sm:grid-cols-3">
             <div className="space-y-2">
               <ShieldCheck className="size-5 text-primary" />
-              <h3 className="font-semibold">Sécurité par conception</h3>
+              <h3 className="font-semibold">Confidentialité &amp; contrôle des accès</h3>
               <p className="text-sm text-muted-foreground">
-                Rôles granulaires, permissions vérifiées côté serveur, Row Level Security et journal
-                d&apos;audit. La clé de service n&apos;est jamais exposée au navigateur.
+                Définissez les responsabilités de chaque collaborateur avec des profils adaptés et un
+                suivi complet des opérations de votre organisation.
               </p>
             </div>
             <div className="space-y-2">
               <BarChart3 className="size-5 text-primary" />
-              <h3 className="font-semibold">Décisions fondées sur vos données</h3>
+              <h3 className="font-semibold">Pilotage de la performance</h3>
               <p className="text-sm text-muted-foreground">
-                Indicateurs, rapports et exports calculés à partir des enregistrements réels de votre
-                organisation, avec filtres par période.
+                Tableaux de bord synthétiques, rapports d&apos;activité et exports en un clic pour
+                suivre vos résultats sur la période de votre choix.
               </p>
             </div>
             <div className="space-y-2">
               <Bot className="size-5 text-primary" />
-              <h3 className="font-semibold">Assistant IA connecté</h3>
+              <h3 className="font-semibold">Assistant IA intégré</h3>
               <p className="text-sm text-muted-foreground">
-                Synthèse exécutive, analyse du pipeline commercial, suivi des projets et aide à la
-                rédaction directement connectés aux données autorisées par votre rôle.
+                Synthèse exécutive, analyse commerciale, suivi des priorités et aide à la rédaction
+                de comptes rendus directement depuis votre espace.
               </p>
             </div>
           </div>

@@ -181,7 +181,7 @@ export default async function DashboardPage({
             <div>
               <CardTitle>Trésorerie enregistrée</CardTitle>
               <CardDescription>
-                Revenus et dépenses saisis sur les 6 derniers mois — données réelles de la base.
+                Revenus et dépenses enregistrés sur les 6 derniers mois.
               </CardDescription>
             </div>
             {!data.finance.canRead ? <Badge>Accès finances restreint</Badge> : null}

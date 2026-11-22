@@ -5,7 +5,7 @@ import { requirePagePermission, can } from "@/lib/server/context";
 import { listAnnouncements, listEvents } from "@/modules/communication/service";
 import { listDepartments } from "@/modules/organization/service";
 import { listProjects } from "@/modules/projects/service";
-import { Alert, EmptyState, PageHeader } from "@/components/ui/misc";
+import { EmptyState, PageHeader } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField, Input, NativeSelect, Textarea } from "@/components/ui/input";
@@ -286,11 +286,6 @@ export default async function CommunicationPage({
           </CardContent>
         </Card>
       ) : null}
-
-      <Alert variant="info" title="Périmètre">
-        Ce module couvre les annonces internes et le calendrier. La messagerie instantanée et les
-        notifications temps réel ne sont pas développées.
-      </Alert>
     </div>
   );
 }

@@ -169,7 +169,7 @@ export function AssistantConsole({ initialResponse }: AssistantConsoleProps) {
 
             <div className="flex items-center justify-between gap-3">
               <p className="text-[11px] text-muted-foreground">
-                Sécurité RLS active · Seuls vos modules autorisés sont consultés.
+                Analyse confidentielle fondée sur vos modules autorisés.
               </p>
               <Button type="submit" loading={pending}>
                 <Send className="size-4" />
@@ -188,7 +188,7 @@ export function AssistantConsole({ initialResponse }: AssistantConsoleProps) {
                 <Bot className="size-4 text-primary" /> Réponse de l&apos;Assistant IA
               </CardTitle>
               <CardDescription>
-                Moteur actif : <span className="font-medium text-foreground">{currentResponse.providerLabel}</span>
+                Synthèse et recommandations personnalisées pour votre organisation
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">

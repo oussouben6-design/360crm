@@ -55,9 +55,8 @@ export default async function SecurityPage() {
               ({user.email}) : la liaison est automatique.
             </p>
           ) : (
-            <Alert variant="warning" title="Connexion Google non activée sur ce serveur">
-              L&apos;administrateur doit définir <code>GOOGLE_CLIENT_ID</code> et{" "}
-              <code>GOOGLE_CLIENT_SECRET</code> (voir docs/configuration.md).
+            <Alert variant="info" title="Connexion Google non activée">
+              Contactez votre administrateur si vous souhaitez activer la connexion rapide avec Google.
             </Alert>
           )}
         </CardContent>
@@ -77,10 +76,9 @@ export default async function SecurityPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {!mfa.available ? (
-            <Alert variant="warning" title="Fonctionnalité indisponible sur ce serveur">
-              La variable <code>MFA_ENCRYPTION_KEY</code> n&apos;est pas configurée : le secret ne peut pas être
-              chiffré, donc l&apos;activation est refusée. Générez une clé avec{" "}
-              <code>openssl rand -base64 32</code>, ajoutez-la à la configuration du serveur puis redémarrez.
+            <Alert variant="warning" title="Double authentification non activée">
+              Contactez l&apos;administrateur de votre organisation pour activer la double
+              authentification.
             </Alert>
           ) : mfa.enabled ? (
             <>
@@ -105,8 +103,8 @@ export default async function SecurityPage() {
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
-                L&apos;activation nécessite une application d&apos;authentification. Le secret est chiffré en
-                AES-256-GCM : il n&apos;est jamais stocké en clair.
+                Munissez-vous d&apos;une application d&apos;authentification mobile (Google
+                Authenticator, Authy, 1Password…) pour associer votre appareil.
               </p>
               <MfaEnrollmentPanel />
             </>

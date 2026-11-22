@@ -30,7 +30,7 @@ export default async function RolesPage() {
     <div className="space-y-5">
       <PageHeader
         title="Rôles & permissions"
-        description="Les permissions sont vérifiées côté serveur et dans la base (RLS). Modifier un rôle affecte immédiatement ses membres."
+        description="Définissez les droits d'accès de chaque profil au sein de votre organisation. Modifier un rôle s'applique immédiatement à ses membres."
       />
 
       {!editable ? (
@@ -40,8 +40,7 @@ export default async function RolesPage() {
         </Alert>
       ) : (
         <Alert variant="warning" title="Principe de moindre privilège">
-          Accordez uniquement les permissions nécessaires. Certaines données sensibles (RH, finances)
-          sont en outre protégées par des politiques au niveau de la base.
+          Accordez à chaque profil uniquement les permissions utiles à ses missions quotidiennes.
         </Alert>
       )}
 

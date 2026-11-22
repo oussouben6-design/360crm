@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Connexion" };
 
 /** Messages affichés après un retour du flux Google (`/api/auth/google/callback`). */
 const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
-  google_non_configure: "La connexion avec Google n'est pas activée sur ce serveur.",
+  google_non_configure: "La connexion avec Google n'est pas disponible actuellement.",
   google_annule: "Connexion Google annulée.",
   google_echec: "La connexion avec Google a échoué. Réessayez ou utilisez votre mot de passe.",
   email_non_verifie:

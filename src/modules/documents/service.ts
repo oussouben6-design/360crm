@@ -94,13 +94,7 @@ export async function uploadDocument(
     entityType: string | null;
     entityId: string | null;
   },
-): Promise<{ id: string }> {
-  if (storageDriver() === "supabase") {
-    throw new AppError(
-      "unavailable",
-      "Le stockage Supabase n'est pas encore implémenté. Utilisez le stockage local (STORAGE_DRIVER=local).",
-    );
-  }
+  ): Promise<{ id: string }> {
   if (!input.file || input.file.size === 0) {
     throw new AppError("validation", "Aucun fichier sélectionné.");
   }
@@ -120,6 +114,7 @@ export async function uploadDocument(
   const displayName = sanitizeFilename(input.name?.trim() || input.file.name || "document");
   const documentId = crypto.randomUUID();
   const storagePath = buildStoragePath(context.organizationId, documentId, displayName);
+  const provider = storageDriver();
 
   await saveFile(storagePath, buffer);
 
@@ -129,7 +124,7 @@ export async function uploadDocument(
         `insert into documents
           (id, organization_id, name, description, category, mime_type, size_bytes, storage_provider,
            storage_path, checksum, entity_type, entity_id, uploaded_by)
-         values ($1,$2,$3,$4,$5,$6,$7,'local',$8,$9,$10,$11,$12)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
          returning id`,
         [
           documentId,
@@ -139,6 +134,7 @@ export async function uploadDocument(
           input.category,
           mime,
           buffer.length,
+          provider,
           storagePath,
           hash,
           input.entityType,

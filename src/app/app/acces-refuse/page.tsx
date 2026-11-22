@@ -69,10 +69,8 @@ export default async function AccessDeniedPage({
           </dl>
 
           <p className="text-muted-foreground">
-            Cette restriction est appliquée côté serveur : les données du module ne sont pas
-            chargées et les actions correspondantes sont refusées. Si cet accès est nécessaire à
-            votre mission, demandez à un administrateur principal d&apos;ajuster les permissions de
-            votre rôle.
+            Si cet accès est nécessaire à votre mission, demandez à l&apos;administrateur principal de
+            votre organisation d&apos;ajuster les permissions associées à votre rôle.
           </p>
 
           <div className="flex flex-wrap gap-2">

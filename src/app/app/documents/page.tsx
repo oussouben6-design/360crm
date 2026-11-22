@@ -7,7 +7,7 @@ import {
   listDocuments,
   listFolders,
 } from "@/modules/documents/service";
-import { PageHeader, EmptyState, Alert } from "@/components/ui/misc";
+import { PageHeader, EmptyState } from "@/components/ui/misc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,7 +18,6 @@ import { ConfirmDialog } from "@/components/forms/confirm-dialog";
 import { FilterBar } from "@/components/shared/filters";
 import { createFolderAction, deleteDocumentAction, uploadDocumentAction } from "@/modules/documents/actions";
 import { formatDateTime, humanFileSize } from "@/lib/utils";
-import { storageDriver } from "@/lib/storage";
 
 export const metadata: Metadata = { title: "Documents" };
 
@@ -38,13 +37,12 @@ export default async function DocumentsPage({
 
   const canCreate = can(context, "documents", "create");
   const canDelete = can(context, "documents", "delete");
-  const driver = storageDriver();
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="Documents"
-        description="Import, classement et téléchargement sécurisé. Les fichiers ne sont jamais exposés publiquement."
+        description="Import, classement par dossier et partage sécurisé au sein de votre organisation."
         actions={
           <>
             {can(context, "documents", "update") ? (
@@ -124,19 +122,6 @@ export default async function DocumentsPage({
           </>
         }
       />
-
-      {driver === "local" ? (
-        <Alert variant="info">
-          Stockage local actif : les fichiers sont enregistrés dans le répertoire privé du serveur
-          (<code>.data/storage</code>). Le stockage Supabase n&apos;est pas encore implémenté et est donc
-          explicitement indisponible.
-        </Alert>
-      ) : (
-        <Alert variant="warning" title="Stockage Supabase non disponible">
-          STORAGE_DRIVER=supabase est configuré mais ce pilote n&apos;est pas implémenté. Les imports et
-          téléchargements échoueront jusqu&apos;à configuration d&apos;un stockage pris en charge.
-        </Alert>
-      )}
 
       <Card className="overflow-hidden">
         <div className="border-b border-border p-4">
@@ -223,7 +208,7 @@ export default async function DocumentsPage({
       </Card>
 
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Upload className="size-3.5" /> Chaque import est journalisé (auteur, taille, empreinte SHA-256).
+        <Upload className="size-3.5" /> Chaque document importé est horodaté et rattaché à votre organisation.
       </p>
     </div>
   );

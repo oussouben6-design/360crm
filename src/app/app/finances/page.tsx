@@ -136,12 +136,6 @@ export default async function FinancePage({
         }
       />
 
-      <Alert variant="warning" title="Ce module n'est pas une comptabilité certifiée">
-        Les montants sont suivis en trésorerie (encaissements et dépenses) pour le pilotage interne.
-        Aucun journal comptable, aucune balance, aucune déclaration fiscale ne sont produits. Les
-        montants sont stockés en unité mineure entière de la devise de l&apos;organisation ({currency}).
-      </Alert>
-
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Facturé (hors annulées)"

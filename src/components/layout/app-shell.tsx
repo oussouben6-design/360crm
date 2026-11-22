@@ -166,8 +166,7 @@ export function AppShell({
             className="border-b border-warning/30 bg-warning-soft px-4 py-2 text-center text-xs font-medium text-warning sm:px-6"
           >
             Espace de démonstration{demoOrganizationName ? ` — « ${demoOrganizationName} »` : ""} :
-            toutes les données affichées sont fictives et peuvent être supprimées avec{" "}
-            <code className="rounded bg-black/10 px-1 py-0.5 font-mono text-[11px]">npm run db:reset</code>.
+            les données affichées dans cet espace sont fournies à titre d&apos;exemple.
           </div>
         ) : null}
 

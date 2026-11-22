@@ -186,9 +186,9 @@ export function SidebarContent({
 
       <div className="border-t border-white/10 px-4 py-3 text-[11px] text-sidebar-muted">
         <p className="flex items-center gap-1.5">
-          <ShieldCheck className="size-3.5" /> Session sécurisée · RLS active
+          <ShieldCheck className="size-3.5" /> Connexion sécurisée
         </p>
-        <p className="mt-1 opacity-70">Excellence 360 CRM v0.1 — par Excellence Services</p>
+        <p className="mt-1 opacity-70">Excellence 360 CRM — par Excellence Services</p>
       </div>
     </div>
   );

@@ -94,19 +94,21 @@ export function AuthShell({
             <li className="flex items-start gap-3">
               <ShieldCheck className="mt-0.5 size-4 text-brand" />
               <span>
-                <span className="font-medium">Permissions vérifiées côté serveur</span>
+                <span className="font-medium">Droits d&apos;accès sur mesure</span>
                 <br />
                 <span className="text-sidebar-muted">
-                  Rôles granulaires et isolation des organisations par RLS.
+                  Adaptez l&apos;accès de chaque collaborateur selon ses responsabilités.
                 </span>
               </span>
             </li>
             <li className="flex items-start gap-3">
               <BarChart3 className="mt-0.5 size-4 text-brand" />
               <span>
-                <span className="font-medium">Indicateurs issus de vos données</span>
+                <span className="font-medium">Suivi en temps réel</span>
                 <br />
-                <span className="text-sidebar-muted">Aucune donnée de démonstration masquée.</span>
+                <span className="text-sidebar-muted">
+                  Tableaux de bord, indicateurs clés et rapports mis à jour instantanément.
+                </span>
               </span>
             </li>
           </ul>
@@ -132,8 +134,7 @@ export function AuthShell({
             ))}
           </div>
           <p>
-            Excellence 360 CRM — par {APP_COMPANY_LEGAL}. Les modules non disponibles sont signalés
-            comme tels.
+            Excellence 360 CRM — par {APP_COMPANY_LEGAL}.
           </p>
         </div>
       </div>
